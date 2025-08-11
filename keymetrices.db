@@ -1,0 +1,61 @@
+a.	Active Projects by Status
+SELECT status, COUNT(*) AS active_project_count
+FROM Projects
+WHERE status NOT IN ('Completed')
+GROUP BY status;
+b.	Tasks Created, Completed, In-Progress This Week
+SELECT 
+    SUM(CASE WHEN DATE(created_at) BETWEEN {start_date} AND {end_date} THEN 1 ELSE 0 END) AS tasks_created,
+    SUM(CASE WHEN status = 'Completed' AND DATE(completed_at) BETWEEN {start_date} AND {end_date} THEN 1 ELSE 0 END) AS tasks_completed,
+    SUM(CASE WHEN status = 'In-Progress' THEN 1 ELSE 0 END) AS tasks_in_progress
+FROM Tasks;
+c.	Average Turnaround Time for Tasks
+SELECT 
+    ROUND(AVG(JULIANDAY(completed_at) - JULIANDAY(created_at)), 2) AS avg_days_turnaround
+FROM Tasks
+WHERE status = 'Completed'
+  AND DATE(completed_at) BETWEEN {start_date} AND {end_date};
+d.	Issues Logged/Resolved This Week
+SELECT 
+    SUM(CASE WHEN DATE(created_at) BETWEEN {start_date} AND {end_date} THEN 1 ELSE 0 END) AS issues_logged,
+    SUM(CASE WHEN DATE(resolved_at) BETWEEN {start_date} AND {end_date} THEN 1 ELSE 0 END) AS issues_resolved
+FROM Issues;
+e.	SLA Breach Count
+-- For Tasks
+SELECT COUNT(*) AS task_sla_breaches
+FROM Tasks
+WHERE status = 'Completed'
+  AND (JULIANDAY(completed_at) - JULIANDAY(created_at)) > sla_days;
+
+-- For Issues
+SELECT COUNT(*) AS issue_sla_breaches
+FROM Issues
+WHERE status = 'Resolved'
+  AND (JULIANDAY(resolved_at) - JULIANDAY(created_at)) > sla_days;
+f.	Task/Issue Breakdown by Assignee
+-- Tasks
+SELECT tm.full_name, COUNT(t.task_id) AS total_tasks
+FROM Tasks t
+JOIN TeamMembers tm ON t.assigned_to = tm.member_id
+GROUP BY tm.full_name;
+
+-- Issues
+SELECT tm.full_name, COUNT(i.issue_id) AS total_issues
+FROM Issues i
+JOIN TeamMembers tm ON i.assigned_to = tm.member_id
+GROUP BY tm.full_name;
+g.	Parameterised Versions
+-- Example parameters
+\set project_name 'Apollo Redesign'
+\set start_date   '2025-08-04'
+\set end_date     '2025-08-11'
+\set assignee     'Jane Doe'
+
+-- Tasks created this week for a given project & assignee
+SELECT COUNT(*) AS tasks_created
+FROM Tasks t
+JOIN Projects p ON t.project_id = p.project_id
+JOIN TeamMembers m ON t.assigned_to = m.member_id
+WHERE p.project_name = :'project_name'
+  AND m.full_name = :'assignee'
+  AND DATE(t.created_at) BETWEEN :'start_date' AND :'end_date';
